@@ -60,3 +60,39 @@ data "external" "kubeadm_join" {
 
   depends_on = ["null_resource.masters_provisioner"]
 }
+
+resource "null_resource" "upgrade" {
+  depends_on = ["module.master_instance", "null_resource.masters_provisioner"]
+  count      = "1"                                   // HA not supported
+
+  triggers {
+    k8s_version       = "${var.k8s_version}"
+    cni_version       = "${var.cni_version}"
+    crictl_version    = "${var.crictl_version}"
+    k8s_feature_gates = "${var.k8s_feature_gates}"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/scripts/"
+    destination = "/tmp"
+
+    connection {
+      host    = "${module.master_instance.public_ip_address}"
+      user    = "core"
+      timeout = "300s"
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "set -e",
+      "chmod +x /tmp/kubeadm-upgrade.sh && sudo /tmp/kubeadm-upgrade.sh ${var.k8s_version} ${var.cni_version} ${var.crictl_version} ${var.k8s_feature_gates}",
+    ]
+
+    connection {
+      host    = "${module.master_instance.public_ip_address}"
+      user    = "core"
+      timeout = "300s"
+    }
+  }
+}

@@ -35,3 +35,39 @@ resource "null_resource" "kubeadm_join" {
     }
   }
 }
+
+resource "null_resource" "upgrade" {
+  count      = "${var.node_count}"
+  depends_on = ["module.node", "null_resource.kubeadm_join"]
+
+  triggers {
+    k8s_version       = "${var.k8s_version}"
+    cni_version       = "${var.cni_version}"
+    crictl_version    = "${var.crictl_version}"
+    k8s_feature_gates = "${var.k8s_feature_gates}"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/scripts/"
+    destination = "/tmp"
+
+    connection {
+      host    = "${element(module.node.nodes_public_ip, count.index)}"
+      user    = "core"
+      timeout = "300s"
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "set -e",
+      "chmod +x /tmp/kubeadm-upgrade.sh && sudo /tmp/kubeadm-upgrade.sh ${var.k8s_version} ${var.cni_version} ${var.crictl_version} ${var.k8s_feature_gates}",
+    ]
+
+    connection {
+      host    = "${element(module.node.nodes_public_ip, count.index)}"
+      user    = "core"
+      timeout = "300s"
+    }
+  }
+}

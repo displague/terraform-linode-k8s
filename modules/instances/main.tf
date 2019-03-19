@@ -53,3 +53,38 @@ resource "linode_instance" "instance" {
     }
   }
 }
+
+resource "null_resource" "upgrade" {
+  count = "${var.node_count}"
+
+  triggers {
+    k8s_version       = "${var.k8s_version}"
+    cni_version       = "${var.cni_version}"
+    crictl_version    = "${var.crictl_version}"
+    k8s_feature_gates = "${var.k8s_feature_gates}"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/scripts/"
+    destination = "/tmp"
+
+    connection {
+      host    = "${linode_instance.instance.*.ip_address[count.index]}"
+      user    = "core"
+      timeout = "300s"
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "set -e",
+      "chmod +x /tmp/kubeadm-upgrade.sh && sudo /tmp/kubeadm-upgrade.sh ${var.k8s_version} ${var.cni_version} ${var.crictl_version} ${var.k8s_feature_gates}",
+    ]
+
+    connection {
+      host    = "${linode_instance.instance.*.ip_address[count.index]}"
+      user    = "core"
+      timeout = "300s"
+    }
+  }
+}
